@@ -124,27 +124,17 @@ public class LocationAgent extends IntentService {
         return earthRadius * c;
     }
 
-    /***
-     * Handle location change
-     */
-    public static class LocationChangeListener implements LocationListener {
-
-        @Override
-        public void onLocationChanged(Location location) {
-            Log.i(Constants.TAG, "Provider: " + location.getProvider());
-            Log.i(Constants.TAG, "Latitude: " + Double.toString(location.getLatitude()));
-            Log.i(Constants.TAG, "Longitude: " + Double.toString(location.getLongitude()));
-        }
-
-    }
-
-    /***
-     * handles
-     */
-    public interface MoveListener {
-
-        void onMove();
-
-    }
-
+//    /***
+//     * Handle location change
+//     */
+//    public static class LocationChangeListener implements LocationListener {
+//
+//        @Override
+//        public void onLocationChanged(Location location) {
+//            Log.i(Constants.TAG, "Provider: " + location.getProvider());
+//            Log.i(Constants.TAG, "Latitude: " + Double.toString(location.getLatitude()));
+//            Log.i(Constants.TAG, "Longitude: " + Double.toString(location.getLongitude()));
+//        }
+//
+//    }
 }

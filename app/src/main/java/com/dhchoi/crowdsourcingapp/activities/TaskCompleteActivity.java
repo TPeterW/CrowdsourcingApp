@@ -46,7 +46,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class TaskCompleteActivity extends BaseGoogleApiActivity {
+public class TaskCompleteActivity extends AppCompatActivity {
 
     private static final String TAG = "TaskComplete";
 
@@ -60,25 +60,25 @@ public class TaskCompleteActivity extends BaseGoogleApiActivity {
         public void onReceive(Context context, Intent intent) {
             Log.d(TAG, "Broadcast Received");
 
-            ArrayList<String> activatedTaskIds = intent.getStringArrayListExtra(LocationAgent.ACTIVATED_TASK_ID_KEY);
-            ArrayList<String> inactivatedTaskIds = intent.getStringArrayListExtra(LocationAgent.INACTIVATED_TASK_ID_KEY);
+//            ArrayList<String> activatedTaskIds = intent.getStringArrayListExtra(LocationAgent.ACTIVATED_TASK_ID_KEY);
+//            ArrayList<String> inactivatedTaskIds = intent.getStringArrayListExtra(LocationAgent.INACTIVATED_TASK_ID_KEY);
+//
+//            Log.d(TAG, "Activated: " + activatedTaskIds.toString());
+//            Log.d(TAG, "Inactivated: " + inactivatedTaskIds.toString());
+//
+//            mTask = TaskManager.getTaskById(TaskCompleteActivity.this, mTask.getId());
+//
+//            updateSubmitResponseButtonStatus();
 
-            Log.d(TAG, "Activated: " + activatedTaskIds.toString());
-            Log.d(TAG, "Inactivated: " + inactivatedTaskIds.toString());
-
-            mTask = TaskManager.getTaskById(TaskCompleteActivity.this, mTask.getId());
-
-            updateSubmitResponseButtonStatus();
-
-//            List<String> inactivatedTaskIds = Arrays.asList(intent.getStringArrayExtra(GeofenceTransitionsIntentService.INACTIVATED_TASK_ID_KEY));
-//            List<String> activatedTaskIds = Arrays.asList(intent.getStringArrayExtra(GeofenceTransitionsIntentService.ACTIVATED_TASK_ID_KEY));
-//            if (inactivatedTaskIds.contains(mTask.getId()) || activatedTaskIds.contains(mTask.getId())) {
-//                updateSubmitResponseButtonStatus();
-//            }
+            List<String> inactivatedTaskIds = Arrays.asList(intent.getStringArrayExtra(GeofenceTransitionsIntentService.INACTIVATED_TASK_ID_KEY));
+            List<String> activatedTaskIds = Arrays.asList(intent.getStringArrayExtra(GeofenceTransitionsIntentService.ACTIVATED_TASK_ID_KEY));
+            if (inactivatedTaskIds.contains(mTask.getId()) || activatedTaskIds.contains(mTask.getId())) {
+                updateSubmitResponseButtonStatus();
+            }
         }
     };
 
-    private LocationAgent.LocationChangeListener locationListener;
+//    private LocationAgent.LocationChangeListener locationListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -150,21 +150,21 @@ public class TaskCompleteActivity extends BaseGoogleApiActivity {
         });
 
         // Register to receive messages.
-//        LocalBroadcastManager.getInstance(this).registerReceiver(mBroadcastReceiver, new IntentFilter(GeofenceTransitionsIntentService.GEOFENCE_TRANSITION_BROADCAST));
-        LocalBroadcastManager.getInstance(this).registerReceiver(mBroadcastReceiver, new IntentFilter(LocationAgent.LOCATION_AGENT_BROADCAST));
+        LocalBroadcastManager.getInstance(this).registerReceiver(mBroadcastReceiver, new IntentFilter(GeofenceTransitionsIntentService.GEOFENCE_TRANSITION_BROADCAST));
+//        LocalBroadcastManager.getInstance(this).registerReceiver(mBroadcastReceiver, new IntentFilter(LocationAgent.LOCATION_AGENT_BROADCAST));
 
-        locationListener = new LocationAgent.LocationChangeListener() {
-            @Override
-            public void onLocationChanged(Location location) {
-                super.onLocationChanged(location);      // print log
-
-                Intent intent = new Intent(TaskCompleteActivity.this, LocationAgent.class);
-                String latLngStr = new Gson().toJson(new LatLng(location.getLatitude(), location.getLongitude()));
-                intent.setData(Uri.parse(latLngStr));
-                startService(intent);
-                Log.d(TAG, "Intent Sent from " + TAG);
-            }
-        };
+//        locationListener = new LocationAgent.LocationChangeListener() {
+//            @Override
+//            public void onLocationChanged(Location location) {
+//                super.onLocationChanged(location);      // print log
+//
+//                Intent intent = new Intent(TaskCompleteActivity.this, LocationAgent.class);
+//                String latLngStr = new Gson().toJson(new LatLng(location.getLatitude(), location.getLongitude()));
+//                intent.setData(Uri.parse(latLngStr));
+//                startService(intent);
+//                Log.d(TAG, "Intent Sent from " + TAG);
+//            }
+//        };
     }
 
     @Override
@@ -231,18 +231,18 @@ public class TaskCompleteActivity extends BaseGoogleApiActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    @SuppressWarnings("All")
-    @Override
-    public void onConnected(Bundle bundle) {
-        super.onConnected(bundle);
-
-        LocationServices.FusedLocationApi.requestLocationUpdates(
-                getGoogleApiClient(),
-                LocationRequest.create()
-                        .setInterval(5000)
-                        .setFastestInterval(1000)
-                        .setSmallestDisplacement(0.0001f)
-                        .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY),
-                locationListener);
-    }
+//    @SuppressWarnings("All")
+//    @Override
+//    public void onConnected(Bundle bundle) {
+//        super.onConnected(bundle);
+//
+//        LocationServices.FusedLocationApi.requestLocationUpdates(
+//                getGoogleApiClient(),
+//                LocationRequest.create()
+//                        .setInterval(5000)
+//                        .setFastestInterval(1000)
+//                        .setSmallestDisplacement(0.0001f)
+//                        .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY),
+//                locationListener);
+//    }
 }
