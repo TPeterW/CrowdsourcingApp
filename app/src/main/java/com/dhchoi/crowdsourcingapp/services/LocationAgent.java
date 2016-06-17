@@ -1,4 +1,4 @@
-package com.dhchoi.crowdsourcingapp;
+package com.dhchoi.crowdsourcingapp.services;
 
 import android.app.IntentService;
 import android.content.Intent;
@@ -6,6 +6,7 @@ import android.location.Location;
 import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 
+import com.dhchoi.crowdsourcingapp.Constants;
 import com.dhchoi.crowdsourcingapp.task.Task;
 import com.dhchoi.crowdsourcingapp.task.TaskManager;
 import com.google.android.gms.location.LocationListener;
