@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
-import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.Map;
@@ -65,19 +64,21 @@ public class HttpClientCallable implements Callable<String> {
                 }
             }
 
+            BufferedReader in;
             if (urlConnection.getResponseCode() == HttpsURLConnection.HTTP_OK) {
-                BufferedReader in = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
-                response = "";
-                String line;
-                while ((line = in.readLine()) != null) {
-                    response += line;
-                }
+                in = new BufferedReader(new InputStreamReader(urlConnection.getInputStream()));
             } else {
                 // Do response handling for bad response codes
-                Log.e(TAG, "Bad http response code: " + urlConnection.getResponseCode());
+                in = new BufferedReader(new InputStreamReader(urlConnection.getErrorStream()));
             }
-        } catch (SocketTimeoutException e) {
-            Log.e(TAG, e.getMessage());
+
+            // read response
+            response = "";
+            String line;
+            while ((line = in.readLine()) != null) {
+                response += line;
+            }
+
         } catch (IOException e) {
             Log.e(TAG, e.getMessage());
         } finally {
@@ -119,9 +120,7 @@ public class HttpClientCallable implements Callable<String> {
             try {
                 Future<String> result = pool.submit(httpClientCallable);
                 return result.get();
-            } catch (InterruptedException e) {
-                Log.e(TAG, e.getMessage());
-            } catch (ExecutionException e) {
+            } catch (InterruptedException | ExecutionException e) {
                 Log.e(TAG, e.getMessage());
             }
 

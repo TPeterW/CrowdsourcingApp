@@ -4,9 +4,9 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 
-import com.dhchoi.crowdsourcingapp.services.GeofenceTransitionsIntentService;
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingRequest;
+import com.google.android.gms.maps.model.LatLng;
 import com.google.gson.annotations.SerializedName;
 
 import java.io.Serializable;
@@ -55,6 +55,10 @@ public class SimpleGeofence implements Serializable {
         return mLongitude;
     }
 
+    public LatLng getLatLng() {
+        return new LatLng(getLatitude(), getLongitude());
+    }
+
     public float getRadius() {
         return mRadius;
     }
@@ -79,18 +83,4 @@ public class SimpleGeofence implements Serializable {
         return mTaskId + "-" + mName + "-" + mLatitude + "-" + mLongitude + "-" + mRadius;
     }
 
-    public static GeofencingRequest getGeofencingRequest(Geofence geofence) {
-        GeofencingRequest.Builder builder = new GeofencingRequest.Builder();
-        builder.setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER);
-        builder.addGeofence(geofence);
-        return builder.build();
-    }
-
-    /**
-     * Create a PendingIntent that triggers GeofenceTransitionIntentService when a geofence transition occurs.
-     */
-    public static PendingIntent getGeofenceTransitionPendingIntent(Context context) {
-        Intent intent = new Intent(context, GeofenceTransitionsIntentService.class);
-        return PendingIntent.getService(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
-    }
 }

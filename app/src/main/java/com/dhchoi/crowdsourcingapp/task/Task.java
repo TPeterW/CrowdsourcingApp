@@ -1,7 +1,12 @@
 package com.dhchoi.crowdsourcingapp.task;
 
 import com.dhchoi.crowdsourcingapp.SimpleGeofence;
+import com.dhchoi.crowdsourcingapp.user.UserManager;
 import com.google.gson.annotations.SerializedName;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -16,28 +21,34 @@ public class Task implements Serializable {
 
     @SerializedName("id")
     private String mId;
-    @SerializedName("userId")
-    private String mUserId;
     @SerializedName("name")
     private String mName;
     @SerializedName("cost")
     private double mCost;
-    @SerializedName("expiresAt")
-    private double mExpiresAt;
     @SerializedName("refreshRate")
     private int mRefreshRate;
+    @SerializedName("expiresAt")
+    private double mExpiresAt;
+    @SerializedName("answersLeft")
+    private int mAnswersLeft;
+    @SerializedName("createdAt")
+    private String mCreatedAt;
+    @SerializedName("updatedAt")
+    private String mUpdatedAt;
+    @SerializedName("userId")
+    private String mUserId;
     @SerializedName("location")
     private SimpleGeofence mLocation;
+    @SerializedName("taskresponses")
+    private List<TaskResponse> mTaskResponses;
     @SerializedName("taskactions")
-    private List<TaskAction> mTaskActions = new ArrayList<TaskAction>();
-    private boolean mIsActivated = false;
-    private long mCompletionTime = 0;
+    private List<TaskAction> mTaskActions;
 
-    public Task(String id, String name, int cost, SimpleGeofence location) {
-        mId = id;
-        mName = name;
-        mCost = cost;
-        mLocation = location;
+    private boolean mIsActivated = false;
+    private boolean mIsComplete = false;
+
+    public Task() {
+        // necessary for Gson
     }
 
     public String getId() {
@@ -64,6 +75,10 @@ public class Task implements Serializable {
         return mRefreshRate;
     }
 
+    public int getRadius() {
+        return (int) mLocation.getRadius();
+    }
+
     public SimpleGeofence getLocation() {
         return mLocation;
     }
@@ -72,26 +87,52 @@ public class Task implements Serializable {
         return mTaskActions;
     }
 
+    public List<TaskResponse> getTaskResponses() {
+        return mTaskResponses;
+    }
+
     public boolean isActivated() {
         return mIsActivated;
     }
 
     public boolean isCompleted() {
-        long currentTime = new Date().getTime();
-        return mCompletionTime > 0 && (currentTime - mCompletionTime) < mRefreshRate;
+        return mIsComplete;
     }
 
-    public void setActivated(boolean activated) {
+    public Task setActivated(boolean activated) {
         mIsActivated = activated;
+        return this;
     }
 
-    public void setCompletionTime(long completionTime) {
-        mCompletionTime = completionTime;
+    public Task setCompleted(boolean completed) {
+        mIsComplete = completed;
+        return this;
+    }
+
+    public List<String> getMyResponses(String answererId) {
+        ArrayList<String> myResponseStrings = new ArrayList<>();
+
+        JSONArray jsonArray = TaskManager.getTaskResponses(mId);
+        try {
+            for (int i = 0; i < jsonArray.length(); i++) {
+                if (jsonArray.getJSONObject(i).getString("userId").equals(answererId)) {
+                    // get all of my responses
+                    JSONArray myResponseList = jsonArray.getJSONObject(i).getJSONArray("taskactionresponses");
+                    for (int j = 0; j < myResponseList.length(); j++)
+                        myResponseStrings.add(myResponseList.getJSONObject(j).getString("response"));
+                    break;
+                }
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return myResponseStrings;
     }
 
     @Override
     public String toString() {
-        return mId + "-" + mName + "-" + mLocation.getName();
+        return mId + "-" + mName.replaceAll(" ", " ") + "-" + mLocation.getName();
     }
 
 }

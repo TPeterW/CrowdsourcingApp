@@ -8,7 +8,7 @@
     <!-- [END gcm_permission] -->
     <!-- [START location_permission] -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <!--<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />-->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- [END location_permission] -->
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -94,13 +94,12 @@
         <!-- [END gcm_receiver] -->
 
         <service
-            android:name=".services.GeofenceTransitionsIntentService"
-            android:exported="false" />
-        <service
             android:name=".services.FetchAddressIntentService"
             android:exported="false" />
         <service
             android:name=".services.GcmRegistrationIntentService"
+            android:exported="false" />
+        <service android:name=".services.GeofenceIntentService"
             android:exported="false" />
 
         <!-- [START gcm_listener] -->
@@ -127,6 +126,9 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="AIzaSyDOx9RwakcaApU4sc1SbOwadHpsVwP5hAo" />
 
+        <meta-data
+            android:name="io.fabric.ApiKey"
+            android:value="5ee73257befb8f5b0e02c043ff92e04db8dd08d0" />
     </application>
 
 </manifest>

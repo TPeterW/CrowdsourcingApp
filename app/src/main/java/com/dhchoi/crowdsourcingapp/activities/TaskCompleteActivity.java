@@ -5,9 +5,10 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.location.Location;
+import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.content.LocalBroadcastManager;
-import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -23,39 +24,52 @@ import android.widget.Toast;
 import com.dhchoi.crowdsourcingapp.Constants;
 import com.dhchoi.crowdsourcingapp.HttpClientAsyncTask;
 import com.dhchoi.crowdsourcingapp.HttpClientCallable;
+import com.dhchoi.crowdsourcingapp.services.GeofenceIntentService;
 import com.dhchoi.crowdsourcingapp.R;
-import com.dhchoi.crowdsourcingapp.services.GeofenceTransitionsIntentService;
 import com.dhchoi.crowdsourcingapp.task.Task;
 import com.dhchoi.crowdsourcingapp.task.TaskAction;
 import com.dhchoi.crowdsourcingapp.task.TaskManager;
 import com.dhchoi.crowdsourcingapp.user.UserManager;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.gson.Gson;
+import com.rengwuxian.materialedittext.MaterialEditText;
 
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class TaskCompleteActivity extends AppCompatActivity {
+public class TaskCompleteActivity extends BaseGoogleApiActivity {
 
-    private List<ViewGroup> mTaskActionLayouts = new ArrayList<ViewGroup>();
-    private SharedPreferences mSharedPreferences;
+    private static final String TAG = "TaskComplete";
+
+    private List<ViewGroup> mTaskActionLayouts = new ArrayList<>();
     private Button mSubmitResponseButton;
     private TextView mSubmissionNotice;
     private Task mTask;
     private BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            List<String> inactivatedTaskIds = Arrays.asList(intent.getStringArrayExtra(GeofenceTransitionsIntentService.INACTIVATED_TASK_ID_KEY));
-            List<String> activatedTaskIds = Arrays.asList(intent.getStringArrayExtra(GeofenceTransitionsIntentService.ACTIVATED_TASK_ID_KEY));
-            if (inactivatedTaskIds.contains(mTask.getId()) || activatedTaskIds.contains(mTask.getId())) {
-                updateSubmitResponseButtonStatus();
-            }
+            Log.d(TAG, "Broadcast Received");
+
+            ArrayList<String> activatedTaskIds = intent.getStringArrayListExtra(GeofenceIntentService.ACTIVATED_TASK_ID_KEY);
+            ArrayList<String> inactivatedTaskIds = intent.getStringArrayListExtra(GeofenceIntentService.INACTIVATED_TASK_ID_KEY);
+
+            Log.d(TAG, "Activated: " + activatedTaskIds.toString());
+            Log.d(TAG, "Inactivated: " + inactivatedTaskIds.toString());
+
+            mTask = TaskManager.getTaskById(TaskCompleteActivity.this, mTask.getId());
+
+            updateSubmitResponseButtonStatus();
+
         }
     };
+
+    private GeofenceIntentService.LocationChangeListener locationListener;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,23 +81,24 @@ public class TaskCompleteActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 
-        mSharedPreferences = getSharedPreferences(Constants.DEFAULT_SHARED_PREF, MODE_PRIVATE);
-
         mTask = TaskManager.getTaskById(this, getIntent().getStringExtra(Task.TASK_KEY_SERIALIZABLE));
         Log.d(Constants.TAG, "creating activity with task: " + mTask);
 
         final ProgressBar submitResponseProgressBar = (ProgressBar) findViewById(R.id.submitResponseProgressBar);
         mSubmitResponseButton = (Button) findViewById(R.id.submit_button);
         mSubmissionNotice = (TextView) findViewById(R.id.submission_notice);
-        ((TextView) findViewById(R.id.task_name)).setText(mTask.getName());
+        ((TextView) findViewById(R.id.num_submitted_response)).setText(mTask.getName());
         ((TextView) findViewById(R.id.task_location)).setText(mTask.getLocation().getName());
 
         final ViewGroup taskActionsLayout = (ViewGroup) findViewById(R.id.task_actions);
         for (TaskAction taskAction : mTask.getTaskActions()) {
             if (taskAction.getType() == TaskAction.TaskActionType.TEXT) {
                 View taskActionLayout = LayoutInflater.from(this).inflate(R.layout.task_action_text_complete, null);
-                ((TextView) taskActionLayout.findViewById(R.id.task_action_description)).setText(taskAction.getDescription());
-                taskActionLayout.findViewById(R.id.task_action_response).setTag(taskAction.getId());
+
+                MaterialEditText materialEditText = (MaterialEditText) taskActionLayout.findViewById(R.id.task_action_response);
+                materialEditText.setFloatingLabelText(taskAction.getDescription());
+                materialEditText.setTag(taskAction.getId());
+
                 mTaskActionLayouts.add((ViewGroup) taskActionLayout);
                 taskActionsLayout.addView(taskActionLayout);
             }
@@ -105,13 +120,20 @@ public class TaskCompleteActivity extends AppCompatActivity {
 
                         try {
                             JSONObject responseObj = new JSONObject(response);
-                            if (responseObj.getBoolean("result")) {
+                            if (responseObj.getString("error").length() > 0) {
+                                Toast.makeText(TaskCompleteActivity.this, responseObj.getString("error"), Toast.LENGTH_SHORT).show();
+                            } else if (responseObj.getBoolean("result")) {
                                 Toast.makeText(TaskCompleteActivity.this, "Response submitted!", Toast.LENGTH_SHORT).show();
                                 // update the time when the task was completed
-                                mTask.setCompletionTime(new Date().getTime()); // TODO: use same value from server
+                                // use same value from server ???
+                                // update the task from server
+                                // mainly for answersLeft field, and answerers
+
+                                mTask.setCompleted(true);
                                 TaskManager.updateTask(TaskCompleteActivity.this, mTask);
                                 // exit activity
-                                TaskCompleteActivity.this.finish();
+                                setResult(MainActivity.RESPOND_SUCCESS);
+                                finish();
                             } else {
                                 Toast.makeText(TaskCompleteActivity.this, "Your request was ill-formatted. Please check inputs again.", Toast.LENGTH_SHORT).show();
                             }
@@ -126,7 +148,21 @@ public class TaskCompleteActivity extends AppCompatActivity {
         });
 
         // Register to receive messages.
-        LocalBroadcastManager.getInstance(this).registerReceiver(mBroadcastReceiver, new IntentFilter(GeofenceTransitionsIntentService.GEOFENCE_TRANSITION_BROADCAST));
+//        LocalBroadcastManager.getInstance(this).registerReceiver(mBroadcastReceiver, new IntentFilter(GeofenceTransitionsIntentService.GEOFENCE_TRANSITION_BROADCAST));
+        LocalBroadcastManager.getInstance(this).registerReceiver(mBroadcastReceiver, new IntentFilter(GeofenceIntentService.LOCATION_AGENT_BROADCAST));
+
+        locationListener = new GeofenceIntentService.LocationChangeListener() {
+            @Override
+            public void onLocationChanged(Location location) {
+                super.onLocationChanged(location);      // print log
+
+                Intent intent = new Intent(TaskCompleteActivity.this, GeofenceIntentService.class);
+                String latLngStr = new Gson().toJson(new LatLng(location.getLatitude(), location.getLongitude()));
+                intent.setData(Uri.parse(latLngStr));
+                startService(intent);
+                Log.d(TAG, "Intent Sent from " + TAG);
+            }
+        };
     }
 
     @Override
@@ -137,7 +173,6 @@ public class TaskCompleteActivity extends AppCompatActivity {
     }
 
     private void updateSubmitResponseButtonStatus() {
-        // TODO: think about what to do if user leaves region on this screen
 
         if (!mTask.isActivated()) {
             mSubmitResponseButton.setEnabled(false);
@@ -164,13 +199,13 @@ public class TaskCompleteActivity extends AppCompatActivity {
                     String taskActionId = (String) childView.getTag();
                     String taskActionResponse = ((EditText) childView).getText().toString();
 
-                    taskActionIds += taskActionId + ",";
+                    taskActionIds += "\"" + taskActionId + "\",";
                     taskActionResponses += "\"" + taskActionId + "\": \"" + taskActionResponse + "\",";
                 }
             }
         }
 
-        taskActionIds = taskActionIds.substring(0, taskActionIds.length() - 1);
+        taskActionIds = taskActionIds.substring(0, taskActionIds.length() - 1); // remove that last ','
         taskActionIds += "]";
         userResponses.put("taskActionIds", taskActionIds);
 
@@ -192,5 +227,20 @@ public class TaskCompleteActivity extends AppCompatActivity {
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    @SuppressWarnings("All")
+    @Override
+    public void onConnected(Bundle bundle) {
+        super.onConnected(bundle);
+
+        LocationServices.FusedLocationApi.requestLocationUpdates(
+                getGoogleApiClient(),
+                LocationRequest.create()
+                        .setInterval(5000)
+                        .setFastestInterval(1000)
+                        .setSmallestDisplacement(0.0001f)
+                        .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY),
+                locationListener);
     }
 }

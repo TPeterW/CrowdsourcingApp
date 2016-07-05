@@ -3,6 +3,7 @@ package com.dhchoi.crowdsourcingapp.fragments;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v4.app.Fragment;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,6 +23,8 @@ public class TaskAvailableFragment extends Fragment {
     private TaskAvailableMapFragment mTaskAvailableMapFragment = new TaskAvailableMapFragment();
     private TaskAvailableListFragment mTaskAvailableListFragment = new TaskAvailableListFragment();
 
+    private FloatingActionButton fab;
+
     public TaskAvailableFragment() {
         // Required empty public constructor
     }
@@ -35,12 +38,11 @@ public class TaskAvailableFragment extends Fragment {
         View mRootView = inflater.inflate(R.layout.fragment_task_available, container, false);
         getChildFragmentManager().beginTransaction().replace(R.id.task_view_container, isMapShown ? mTaskAvailableMapFragment : mTaskAvailableListFragment).commit();
 
-        FloatingActionButton fab = (FloatingActionButton) mRootView.findViewById(R.id.fab);
+        fab = (FloatingActionButton) mRootView.findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 swapFragments();
-                isMapShown = !isMapShown;
             }
         });
 
@@ -52,6 +54,11 @@ public class TaskAvailableFragment extends Fragment {
                 // .setCustomAnimations(R.animator.fade_in, R.animator.fade_out)
                 .replace(R.id.task_view_container, !isMapShown ? mTaskAvailableMapFragment : mTaskAvailableListFragment)
                 .commit();
+        isMapShown = !isMapShown;
+        if (fab.isShown())
+            fab.hide();
+        else
+            fab.show();
     }
 
     public TaskAvailableMapFragment getTaskAvailableMapFragment() {
@@ -61,4 +68,5 @@ public class TaskAvailableFragment extends Fragment {
     public TaskAvailableListFragment getTaskAvailableListFragment() {
         return mTaskAvailableListFragment;
     }
+
 }
