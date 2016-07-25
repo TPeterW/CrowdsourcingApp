@@ -38,13 +38,6 @@ public class BaseGoogleApiActivity extends AppCompatActivity implements
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        if (!isGooglePlayServicesAvailable()) {
-            Log.e(TAG, "Google Play services unavailable.");
-            Toast.makeText(this, "The app needs Google Play Services to run properly!", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
-
         // check permissions
         if (ActivityCompat.checkSelfPermission(this, requiredPermission) != PackageManager.PERMISSION_GRANTED) {
             // Check Permissions Now

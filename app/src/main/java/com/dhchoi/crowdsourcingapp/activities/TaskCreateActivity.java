@@ -3,7 +3,10 @@ package com.dhchoi.crowdsourcingapp.activities;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
+import android.location.Location;
+import android.location.LocationManager;
 import android.os.Bundle;
+import android.support.annotation.IntegerRes;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -26,6 +29,7 @@ import com.dhchoi.crowdsourcingapp.Constants;
 import com.dhchoi.crowdsourcingapp.HttpClientAsyncTask;
 import com.dhchoi.crowdsourcingapp.HttpClientCallable;
 import com.dhchoi.crowdsourcingapp.R;
+import com.dhchoi.crowdsourcingapp.services.BackgroundLocationService;
 import com.dhchoi.crowdsourcingapp.user.UserManager;
 import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
 import com.google.android.gms.common.GooglePlayServicesRepairableException;
@@ -86,6 +90,7 @@ public class TaskCreateActivity extends AppCompatActivity {
 
     private static final String SHOWCASE_ID = "TaskCreateActivityShowcase";
 
+    @SuppressWarnings("all")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -117,6 +122,11 @@ public class TaskCreateActivity extends AppCompatActivity {
         mAnswersLeft = (MaterialEditText) findViewById(R.id.answers_left);
         mEndlessAnswers = (CheckBox) findViewById(R.id.endless_answers_check);
 
+        // make date & time not editable
+        mDateText.setKeyListener(null);
+        mTimeText.setKeyListener(null);
+        mLocationName.setKeyListener(null);
+
         // validate cost decimal
         mTaskCost.setOnFocusChangeListener(new View.OnFocusChangeListener() {
             @Override
@@ -128,13 +138,24 @@ public class TaskCreateActivity extends AppCompatActivity {
                             double cost = Double.valueOf(editText.getText().toString());
                             editText.setText(
                                     String.valueOf(
-                                            new DecimalFormat("#.#").format(
-                                                    Math.floor(cost * 10 + .5) / 10)));
+                                            new DecimalFormat("#.##").format(
+                                                    Math.floor(cost * 100 + .5) / 100)));
                         }
                     } catch (NumberFormatException e) {
                         e.printStackTrace();
                         editText.setText("0");
                     }
+                }
+            }
+        });
+
+        // radius cap 100
+        mLocationRadius.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override
+            public void onFocusChange(View view, boolean hasFocus) {
+                if (!hasFocus) {
+                    if (Integer.parseInt(mLocationRadius.getText().toString()) > 100)
+                        mLocationRadius.setText(String.valueOf(100));
                 }
             }
         });
@@ -158,6 +179,9 @@ public class TaskCreateActivity extends AppCompatActivity {
                         mDateText.setText(mExpirationYear + "/" + mExpirationMonth + "/" + mExpirationDay);
                     }
                 }, currentYear, currentMonth, currentDay);
+                datePickerDialog.getDatePicker().setMinDate(Calendar.getInstance().getTimeInMillis());
+                datePickerDialog.getDatePicker().updateDate(mExpirationYear, mExpirationMonth - 1, mExpirationDay);
+                datePickerDialog.setTitle(null);
                 datePickerDialog.show();
             }
         });
@@ -172,11 +196,25 @@ public class TaskCreateActivity extends AppCompatActivity {
                 TimePickerDialog timePickerDialog = new TimePickerDialog(TaskCreateActivity.this, new TimePickerDialog.OnTimeSetListener() {
                     @Override
                     public void onTimeSet(TimePicker view, int hourOfDay, int minute) {
+                        Calendar calendar = Calendar.getInstance();
+                        calendar.setTimeZone(TimeZone.getDefault());
+                        long currentTimeInMillis = calendar.getTimeInMillis();
+                        calendar.set(Calendar.YEAR, mExpirationYear);
+                        calendar.set(Calendar.MONTH, mExpirationMonth - 1);
+                        calendar.set(Calendar.DAY_OF_MONTH, mExpirationDay);
+                        calendar.set(Calendar.HOUR_OF_DAY, hourOfDay);
+                        calendar.set(Calendar.MINUTE, minute);
+                        if (calendar.getTimeInMillis() < currentTimeInMillis) {
+                            Toast.makeText(TaskCreateActivity.this, "Cannot set expiration time in the past", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+
                         mExpirationHour = hourOfDay;
                         mExpirationMinute = minute;
                         mTimeText.setText(mExpirationHour + ":" + (mExpirationMinute < 10 ? "0" + mExpirationMinute : mExpirationMinute + ""));    // add padding
                     }
                 }, currentHour, currentMinute, false);
+                timePickerDialog.updateTime(mExpirationHour, mExpirationMinute);
                 timePickerDialog.show();
             }
         });
@@ -208,6 +246,18 @@ public class TaskCreateActivity extends AppCompatActivity {
                     Toast.makeText(TaskCreateActivity.this, "Please check if all fields have been completed.", Toast.LENGTH_SHORT).show();
                     return;
                 }
+
+                Location createLocation;
+                LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                    createLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                    if (createLocation == null)
+                        createLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                } else
+                    createLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+
+                userEntries.put("createLat", createLocation == null ? null : String.valueOf(createLocation.getLatitude()));
+                userEntries.put("createLng", createLocation == null ? null : String.valueOf(createLocation.getLongitude()));
 
                 mSubmit.setEnabled(false);
                 mSubmitProgressBar.setVisibility(ProgressBar.VISIBLE);
@@ -254,10 +304,14 @@ public class TaskCreateActivity extends AppCompatActivity {
 
         MaterialShowcaseSequence sequence = new MaterialShowcaseSequence(this, SHOWCASE_ID);
         sequence.setConfig(config);
-        sequence.addSequenceItem(mRefreshRate, "Refresh Rate", "Interval between each answer", "GOT IT")
+
+        sequence.addSequenceItem(mTaskName, "Task Name", "e.g. Is the CHIMPS Lab crowded right now?", "GOT IT")
+                .addSequenceItem(mRefreshRate, "Refresh Rate", "Interval between each answer", "GOT IT")
                 .addSequenceItem(mLocationRadius, "Location Radius", "Radius of area where people can do this task", "GOT IT")
                 .addSequenceItem(mAnswersLeft, "Total Answers", "How many answers you expect to receive, check endless if no limit", "GOT IT")
                 .start();
+
+        setDefaultTime();
     }
 
     @Override
@@ -282,10 +336,21 @@ public class TaskCreateActivity extends AppCompatActivity {
 
         // required fields: (with at least one pair of [taskDescription, taskType])
         String[] requiredFields = {"userId", "taskName", "cost", "expiresAt", "refreshRate", "locationName", "lat", "lng", "radius", "taskDescription", "taskType"};
-        if (userEntries.size() < requiredFields.length)
-            return false;
+        return userEntries.size() >= requiredFields.length;
 
-        return true;
+    }
+
+    private void setDefaultTime() {
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTimeInMillis(calendar.getTimeInMillis() + 1000 * 60 * 60 * 24);
+        mExpirationYear = calendar.get(Calendar.YEAR);
+        mExpirationMonth = calendar.get(Calendar.MONTH) + 1;
+        mExpirationDay = calendar.get(Calendar.DAY_OF_MONTH);
+        mExpirationHour = calendar.get(Calendar.HOUR_OF_DAY);
+        mExpirationMinute = calendar.get(Calendar.MINUTE);
+
+        mDateText.setText(mExpirationYear + "/" + mExpirationMonth + "/" + mExpirationDay);
+        mTimeText.setText(mExpirationHour + ":" + (mExpirationMinute < 10 ? "0" + mExpirationMinute : mExpirationMinute + ""));    // add padding
     }
 
     private String getExpiresAt() {
@@ -331,27 +396,6 @@ public class TaskCreateActivity extends AppCompatActivity {
             }
         }
 
-//        userEntries.put("userId", userId);
-//        userEntries.put("taskName", "Default task");
-//        userEntries.put("cost", "1");
-//        userEntries.put("expiresAt", String.valueOf(new Date().getTime() + 1000 * 60 * 60 * 24));
-//        userEntries.put("refreshRate", "60");
-//        userEntries.put("answersLeft", "-1");
-//        userEntries.put("locationName", "CMU");
-//        userEntries.put("lat", "40.4430");
-//        userEntries.put("lng", "-79.9455");
-//        userEntries.put("radius", "1000");
-//
-//        String descriptionKey = "taskActions[" + 0 + "][description]";
-//        String typeKey = "taskActions[" + 0 + "][type]";
-//        userEntries.put(descriptionKey, "Default description");
-//        userEntries.put(typeKey, "text");
-//
-//        descriptionKey = "taskActions[" + 1 + "][description]";
-//        typeKey = "taskActions[" + 1 + "][type]";
-//        userEntries.put(descriptionKey, "Default description");
-//        userEntries.put(typeKey, "text");
-
         return userEntries;
     }
 
@@ -368,5 +412,26 @@ public class TaskCreateActivity extends AppCompatActivity {
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onBackPressed() {
+        BackgroundLocationService.setDoStartService(false);
+        super.onBackPressed();
+    }
+
+    @Override
+    protected void onResume() {
+        if (BackgroundLocationService.isServiceRunning(getApplicationContext(), BackgroundLocationService.class))
+            stopService(new Intent(getApplicationContext(), BackgroundLocationService.class));
+        super.onResume();
+    }
+
+    @Override
+    protected void onStop() {
+        if (BackgroundLocationService.whetherStartService())
+            BackgroundLocationService.startLocationService(getApplicationContext());
+        BackgroundLocationService.setDoStartService(true);
+        super.onStop();
     }
 }

@@ -16,10 +16,11 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.dhchoi.crowdsourcingapp.Constants;
-import com.dhchoi.crowdsourcingapp.SimpleGeofence;
+import com.dhchoi.crowdsourcingapp.GeofenceLocation;
 import com.dhchoi.crowdsourcingapp.activities.BaseGoogleApiActivity;
 import com.dhchoi.crowdsourcingapp.activities.MainActivity;
 import com.dhchoi.crowdsourcingapp.activities.TaskCompleteActivity;
+import com.dhchoi.crowdsourcingapp.services.BackgroundLocationService;
 import com.dhchoi.crowdsourcingapp.task.Task;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
@@ -58,9 +59,15 @@ public class TaskAvailableMapFragment extends SupportMapFragment implements
     private List<Task> mActiveTasks = new ArrayList<>();
     private List<Task> mInactiveTasks = new ArrayList<>();
 
+    public static final int ALL_MARKERS = 0x010;
+    public static final int ACTIVE_MARKERS = 0x011;
+    public static final int INACTIVE_MARKERS = 0x012;
+
     public TaskAvailableMapFragment() {
         super();
     }
+
+    public int FLAG = ALL_MARKERS;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -109,6 +116,7 @@ public class TaskAvailableMapFragment extends SupportMapFragment implements
             @Override
             public void onInfoWindowClick(Marker marker) {
                 // start activity for task
+                BackgroundLocationService.setDoStartService(false);
                 Intent intent = new Intent(getActivity(), TaskCompleteActivity.class);
                 intent.putExtra(Task.TASK_KEY_SERIALIZABLE, mMarkerToTask.get(marker).getId());
                 startActivity(intent);
@@ -148,7 +156,7 @@ public class TaskAvailableMapFragment extends SupportMapFragment implements
             Log.d(Constants.TAG, "ACCESS_FINE_LOCATION not granted and will not perform setMyLocationEnabled(true)");
         }
 
-        updateMarkers();
+        updateMarkers(FLAG);
     }
 
     @Override
@@ -171,17 +179,29 @@ public class TaskAvailableMapFragment extends SupportMapFragment implements
         }
     }
 
-    private void updateMarkers() {
+    public void updateMarkers(int flag) {
         // remove previous markers
         if (mGoogleMap != null)
             mGoogleMap.clear();
+        else
+            return;
 
         List<Task> allTasks = new ArrayList<>();
-        allTasks.addAll(mActiveTasks);
-        allTasks.addAll(mInactiveTasks);
+
+        switch (flag) {
+            case ACTIVE_MARKERS:
+                allTasks.addAll(mActiveTasks);
+                break;
+            case INACTIVE_MARKERS:
+                allTasks.addAll(mInactiveTasks);
+                break;
+            default:
+                allTasks.addAll(mActiveTasks);
+                allTasks.addAll(mInactiveTasks);
+        }
 
         for (Task t : allTasks) {
-            SimpleGeofence simpleGeofence = t.getLocation();
+            GeofenceLocation simpleGeofence = t.getLocation();
             LatLng latLng = new LatLng(simpleGeofence.getLatitude(), simpleGeofence.getLongitude());
             MarkerOptions markerOptions = new MarkerOptions()
                     .position(latLng)
@@ -198,8 +218,8 @@ public class TaskAvailableMapFragment extends SupportMapFragment implements
         mActiveTasks = activatedTasks;
         mInactiveTasks = inactivatedTasks;
 
-        if(getView() != null) {
-            updateMarkers();
+        if (getView() != null) {
+            updateMarkers(FLAG);
         }
     }
 }

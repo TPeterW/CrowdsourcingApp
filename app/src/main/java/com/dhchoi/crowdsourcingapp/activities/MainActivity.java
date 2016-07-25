@@ -1,5 +1,7 @@
 package com.dhchoi.crowdsourcingapp.activities;
 
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -9,6 +11,7 @@ import android.location.Location;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.support.design.widget.Snackbar;
 import android.support.design.widget.TabLayout;
 import android.support.v4.app.Fragment;
@@ -18,6 +21,7 @@ import android.support.v4.content.LocalBroadcastManager;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.Toolbar;
+import android.text.method.BaseKeyListener;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -25,6 +29,10 @@ import android.view.View;
 import android.widget.ProgressBar;
 
 import com.dhchoi.crowdsourcingapp.Constants;
+import com.dhchoi.crowdsourcingapp.fragments.TaskAvailableMapFragment;
+import com.dhchoi.crowdsourcingapp.services.AlarmReceiver;
+import com.dhchoi.crowdsourcingapp.services.BackgroundLocationService;
+import com.dhchoi.crowdsourcingapp.services.GcmMessageListenerService;
 import com.dhchoi.crowdsourcingapp.services.GeofenceIntentService;
 import com.dhchoi.crowdsourcingapp.R;
 import com.dhchoi.crowdsourcingapp.fragments.CrowdActivityFragment;
@@ -39,9 +47,11 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.gson.Gson;
 
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
 
-public class MainActivity extends BaseGoogleApiActivity implements TaskManager.OnSyncCompleteListener {
+public class MainActivity extends BaseGoogleApiActivity implements TaskManager.OnSyncCompleteListener,
+        GcmMessageListenerService.NewTaskListener {
 
     public static final int RESPOND_SUCCESS = 0x5221;
 
@@ -64,6 +74,10 @@ public class MainActivity extends BaseGoogleApiActivity implements TaskManager.O
     private BroadcastReceiver mBroadcastReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
+            // so if MainActivity is not running, let's not do too much
+            if (!PreferenceManager.getDefaultSharedPreferences(getApplicationContext()).getBoolean("MainActivityRunning", false))
+                return;
+
             Log.d(Constants.TAG, "Broadcast Received");
 
             ArrayList<String> activatedTaskIds = intent.getStringArrayListExtra(GeofenceIntentService.ACTIVATED_TASK_ID_KEY);
@@ -108,6 +122,7 @@ public class MainActivity extends BaseGoogleApiActivity implements TaskManager.O
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
+
         // Create the adapter that will return a fragment for each of the three
         // primary sections of the activity.
         mSectionsPagerAdapter = new SectionsPagerAdapter(getSupportFragmentManager());
@@ -147,6 +162,36 @@ public class MainActivity extends BaseGoogleApiActivity implements TaskManager.O
         };
 
         TaskManager.addOnSyncCompleteListener(this);
+
+        setAlarms();
+    }
+
+    /***
+     * 10:00am every day
+     */
+    private void setAlarms() {
+
+        if (!PreferenceManager.getDefaultSharedPreferences(this).getBoolean("alarm_set", false)) {
+            // haven't set alarm
+            AlarmManager alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+
+            Intent intent = new Intent(this, AlarmReceiver.class);
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+
+            // set alarm time to 10:00am
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTimeInMillis(System.currentTimeMillis());
+            calendar.set(Calendar.HOUR_OF_DAY, 10);
+            calendar.set(Calendar.MINUTE, 0);
+
+            // "_WAKEUP" will wake up the phone
+            alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, calendar.getTimeInMillis(),
+                    AlarmManager.INTERVAL_DAY, pendingIntent);
+
+            PreferenceManager.getDefaultSharedPreferences(this).edit()
+                    .putBoolean("alarm_set", true)
+                    .apply();
+        }
     }
 
     @Override
@@ -174,6 +219,7 @@ public class MainActivity extends BaseGoogleApiActivity implements TaskManager.O
                             TaskManager.reset(MainActivity.this, getGoogleApiClient());
 
                             // go back to login page
+                            BackgroundLocationService.setDoStartService(false);
                             startActivity(new Intent(MainActivity.this, CheckLoginActivity.class));
 
                             // unregister location listener
@@ -206,7 +252,7 @@ public class MainActivity extends BaseGoogleApiActivity implements TaskManager.O
         }
 
         if (mTaskAvailableFragment.isMapShown) {
-            mTaskAvailableFragment.swapFragments();
+            mTaskAvailableFragment.swapFragments(TaskAvailableMapFragment.ACTIVE_MARKERS);
             return;
         }
 
@@ -218,12 +264,27 @@ public class MainActivity extends BaseGoogleApiActivity implements TaskManager.O
     public void onConnected(Bundle bundle) {
         super.onConnected(bundle);
 
-        // sync tasks with server
+        syncEverything();
+
+        mTaskAvailableFragment.getTaskAvailableMapFragment().updateCurrentLocation(this);
+
+        LocationServices.FusedLocationApi.requestLocationUpdates(
+                getGoogleApiClient(),
+                LocationRequest.create()
+                        .setInterval(1000 * 5)     // 10 seconds
+                        .setFastestInterval(1000)
+                        .setSmallestDisplacement(0.0001f)
+                        .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY),
+                LocationListener);
+    }
+
+    public void syncEverything() {
+// sync tasks with server
         mSyncProgressBar.setVisibility(ProgressBar.VISIBLE);
         new AsyncTask<Void, Void, Boolean>() {
             @Override
             protected Boolean doInBackground(Void... params) {
-                return TaskManager.syncTasks(MainActivity.this, getGoogleApiClient());
+                return TaskManager.syncTasks(MainActivity.this);
             }
 
             @Override
@@ -274,7 +335,11 @@ public class MainActivity extends BaseGoogleApiActivity implements TaskManager.O
                     protected void onPostExecute(Boolean syncSuccess) {
                         mSyncProgressBar.setVisibility(View.GONE);
                         Fragment currentFragment = mSectionsPagerAdapter.getItem(mViewPager.getCurrentItem());
-                        View currentFragmentView = currentFragment.getView().findViewById(R.id.fragment_content);
+                        try {
+                            View currentFragmentView = currentFragment.getView().findViewById(R.id.fragment_content);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
 
                         if (syncSuccess)
                             triggerOnUserUpdatedEvent();
@@ -290,30 +355,54 @@ public class MainActivity extends BaseGoogleApiActivity implements TaskManager.O
 
             }
         }.execute();
-
-        mTaskAvailableFragment.getTaskAvailableMapFragment().updateCurrentLocation(this);
-
-        LocationServices.FusedLocationApi.requestLocationUpdates(
-                getGoogleApiClient(),
-                LocationRequest.create()
-                        .setInterval(5000)
-                        .setFastestInterval(1000)
-                        .setSmallestDisplacement(0.0001f)
-                        .setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY),
-                LocationListener);
     }
 
     @Override
-    public void onDestroy() {
-        // Unregister since the activity is about to be closed.
+    protected void onResume() {
+        // kill running service
+        if (BackgroundLocationService.isServiceRunning(getApplicationContext(), BackgroundLocationService.class))
+            stopService(new Intent(getApplicationContext(), BackgroundLocationService.class));
+
+        PreferenceManager.getDefaultSharedPreferences(getApplicationContext()).edit()
+                .putBoolean("MainActivityRunning", true)
+                .commit();
+
+        GcmMessageListenerService.registerNewTaskListener(this);
+
+        super.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        PreferenceManager.getDefaultSharedPreferences(getApplicationContext()).edit()
+                .putBoolean("MainActivityRunning", false)
+                .commit();
+    }
+
+    @Override
+    protected void onStop() {
+        // Unregister since the activity is about to be closed
+        // onDestroy is never called when application is kill from activity stack
         LocalBroadcastManager.getInstance(this).unregisterReceiver(mBroadcastReceiver);
-        super.onDestroy();
+
+        // start background location service
+        if (BackgroundLocationService.whetherStartService())
+            BackgroundLocationService.startLocationService(getApplicationContext());
+        BackgroundLocationService.setDoStartService(true);
+
+        super.onStop();
     }
 
     @Override
     public void onSyncComplete() {
         Log.d("MainActivity", "Sync Complete");
         triggerOnTasksUpdatedEvent();
+    }
+
+    @Override
+    public void onNewTask() {
+        syncEverything();
     }
 
     /**

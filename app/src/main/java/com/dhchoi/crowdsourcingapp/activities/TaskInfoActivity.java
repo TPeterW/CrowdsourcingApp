@@ -1,5 +1,6 @@
 package com.dhchoi.crowdsourcingapp.activities;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
@@ -17,6 +18,7 @@ import com.dhchoi.crowdsourcingapp.Constants;
 import com.dhchoi.crowdsourcingapp.HttpClientAsyncTask;
 import com.dhchoi.crowdsourcingapp.HttpClientCallable;
 import com.dhchoi.crowdsourcingapp.R;
+import com.dhchoi.crowdsourcingapp.services.BackgroundLocationService;
 import com.dhchoi.crowdsourcingapp.task.Task;
 import com.dhchoi.crowdsourcingapp.task.TaskManager;
 
@@ -62,8 +64,8 @@ public class TaskInfoActivity extends AppCompatActivity {
 
         mTaskResponseContainer = (ViewGroup) findViewById(R.id.task_response_container);
 
-        Task currentTask = TaskManager.getTaskById(this, getIntent().getStringExtra("taskId"));
-        taskId = currentTask.getId();
+        taskId = getIntent().getStringExtra("taskId");
+        Task currentTask = TaskManager.getTaskById(this, taskId);
         Log.i(TAG, "Task ID: " + taskId);
         Log.i(TAG, "Task Name: " + currentTask.getName());
         Log.i(TAG, "Task Cost: " + currentTask.getCost());
@@ -74,12 +76,16 @@ public class TaskInfoActivity extends AppCompatActivity {
 
         mTaskName.setText(currentTask.getName());
 
-        mDeactivateTask.setOnClickListener(new View.OnClickListener() {
+        if (!currentTask.isActivated())
+            mDeactivateTask.setEnabled(false);
+        else
+            mDeactivateTask.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Toast.makeText(TaskInfoActivity.this, "Not implemented yet", Toast.LENGTH_SHORT).show();
+                deactivateTask();
             }
         });
+
         mDeleteTask.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -123,18 +129,49 @@ public class TaskInfoActivity extends AppCompatActivity {
         }
     }
 
-    private void deleteTask() {
+    private void deactivateTask() {
+        Task deactivatedTask = TaskManager.getTaskById(this, taskId);
+        deactivatedTask.setActivated(false);
+        TaskManager.updateTask(this, deactivatedTask);
+
         Map<String, String> params = new HashMap<>();
-        new HttpClientAsyncTask(Constants.APP_SERVER_TASK_DELETE_URL + "/" + taskId, HttpClientCallable.GET, params) {
+        new HttpClientAsyncTask(Constants.APP_SERVER_TASK_DEACTIVATE_URL + "/" + taskId, HttpClientCallable.GET, params) {
             @Override
             protected void onPostExecute(String response) {
                 try {
                     if (response != null) {
-                        Log.d("TaskInfoActivity", response);
+                        Log.d(TAG, response);
+                        onBackPressed();
+                    } else {
+                        Toast.makeText(TaskInfoActivity.this, "Failed to deactivate task", Toast.LENGTH_SHORT).show();
+                        Log.d(TAG, "Response is null");
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    Log.e(Constants.TAG, e.getMessage());
+                    Toast.makeText(TaskInfoActivity.this, "Error deactivating task", Toast.LENGTH_SHORT).show();
+                }
+                super.onPostExecute(response);
+            }
+        }.execute();
+    }
+
+    private void deleteTask() {
+        Map<String, String> params = new HashMap<>();
+        new HttpClientAsyncTask(Constants.APP_SERVER_TASK_DEACTIVATE_URL + "/" + taskId, HttpClientCallable.GET, params) {
+            @Override
+            protected void onPostExecute(String response) {
+                try {
+                    if (response != null) {
+                        Log.d(TAG, response);
+                        // remove the task locally
+                        List<String> deleteIds = new ArrayList<>();
+                        deleteIds.add(taskId);
+                        TaskManager.removeTasks(TaskInfoActivity.this, deleteIds);
                         onBackPressed();
                     } else {
                         Toast.makeText(TaskInfoActivity.this, "Failed to delete task", Toast.LENGTH_SHORT).show();
-                        Log.d("TaskInfoActivity", "Response is null");
+                        Log.d(TAG, "Response is null");
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -156,5 +193,26 @@ public class TaskInfoActivity extends AppCompatActivity {
         }
 
         return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onBackPressed() {
+        BackgroundLocationService.setDoStartService(false);
+        super.onBackPressed();
+    }
+
+    @Override
+    protected void onResume() {
+        if (BackgroundLocationService.isServiceRunning(getApplicationContext(), BackgroundLocationService.class))
+            stopService(new Intent(getApplicationContext(), BackgroundLocationService.class));
+        BackgroundLocationService.setDoStartService(false);
+        super.onResume();
+    }
+
+    @Override
+    protected void onStop() {
+        if (BackgroundLocationService.whetherStartService())
+            BackgroundLocationService.startLocationService(getApplicationContext());
+        super.onStop();
     }
 }

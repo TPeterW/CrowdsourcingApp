@@ -4,8 +4,10 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
@@ -25,6 +27,7 @@ import com.dhchoi.crowdsourcingapp.R;
 import com.dhchoi.crowdsourcingapp.activities.MainActivity;
 import com.dhchoi.crowdsourcingapp.activities.TaskCreateActivity;
 import com.dhchoi.crowdsourcingapp.activities.TaskInfoActivity;
+import com.dhchoi.crowdsourcingapp.services.BackgroundLocationService;
 import com.dhchoi.crowdsourcingapp.task.Task;
 import com.dhchoi.crowdsourcingapp.task.TaskManager;
 import com.dhchoi.crowdsourcingapp.user.UserManager;
@@ -83,6 +86,23 @@ public class UserInfoFragment extends Fragment implements MainActivity.OnTasksUp
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                // warn about region
+                SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+                if (!sharedPreferences.getBoolean("boundary_warning_shown", false)) {
+                    android.support.v7.app.AlertDialog alertDialog = new android.support.v7.app.AlertDialog.Builder(getActivity())
+                            .setPositiveButton("GOT IT", null)
+                            .setMessage("We are still in testing phase so please kindly limit your tasks inside the CMU campus")
+                            .create();
+                    alertDialog.setCanceledOnTouchOutside(false);
+                    alertDialog.show();
+
+                    SharedPreferences.Editor editor = sharedPreferences.edit();
+                    editor.putBoolean("boundary_warning_shown", true)
+                            .apply();
+                    return;
+                }
+
+                BackgroundLocationService.setDoStartService(false);
                 Intent intent = new Intent(getActivity(), TaskCreateActivity.class);
                 startActivity(intent);
             }
@@ -97,6 +117,7 @@ public class UserInfoFragment extends Fragment implements MainActivity.OnTasksUp
         mListCreatedTasks.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                BackgroundLocationService.setDoStartService(false);
                 Intent intent = new Intent(getActivity(), TaskInfoActivity.class);
                 intent.putExtra("taskId", mCreatedTaskListAdapter.getItem(position).getId());
                 startActivity(intent);
@@ -177,7 +198,7 @@ public class UserInfoFragment extends Fragment implements MainActivity.OnTasksUp
                     @Override
                     protected Void doInBackground(Void... params) {
                         // update the two layouts
-                        TaskManager.syncTasks(getActivity(), ((MainActivity)getActivity()).getGoogleApiClient());
+                        TaskManager.syncTasks(getActivity());
                         UserManager.syncUser(getActivity());
                         return null;
                     }
@@ -206,10 +227,13 @@ public class UserInfoFragment extends Fragment implements MainActivity.OnTasksUp
 
     @SuppressWarnings("All")
     public void updateUserTextViews() {
-        mUserBalance.setText(String.format("%.1f", UserManager.getUserBalance(getActivity())));
+        mUserBalance.setText(String.format("%.2f", UserManager.getUserBalance(getActivity())));
     }
 
     private void fetchTasks() {
+        if (getActivity() == null)
+            return;
+
         // fetch tasks
         mCreatedTasks.clear();
         mCreatedTasks.addAll(TaskManager.getAllOwnedTasks(getActivity()));
@@ -349,6 +373,7 @@ public class UserInfoFragment extends Fragment implements MainActivity.OnTasksUp
                 TextView responseTextView = new TextView(getActivity());
                 responseTextView.setTextSize(16);
                 responseTextView.setText(resp);
+                responseTextView.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
                 taskResponseContainer.addView(responseTextView);
             }
 

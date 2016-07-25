@@ -2,6 +2,8 @@ package com.dhchoi.crowdsourcingapp.fragments;
 
 import android.content.Context;
 import android.content.Intent;
+import android.location.Location;
+import android.location.LocationManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.design.widget.Snackbar;
@@ -15,6 +17,7 @@ import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -22,6 +25,8 @@ import android.widget.Toast;
 
 import com.dhchoi.crowdsourcingapp.Constants;
 import com.dhchoi.crowdsourcingapp.NotificationHelper;
+import com.dhchoi.crowdsourcingapp.services.BackgroundLocationService;
+import com.dhchoi.crowdsourcingapp.services.GeofenceIntentService;
 import com.dhchoi.crowdsourcingapp.task.TaskManager;
 import com.dhchoi.crowdsourcingapp.views.CustomListView;
 import com.dhchoi.crowdsourcingapp.R;
@@ -29,13 +34,18 @@ import com.dhchoi.crowdsourcingapp.activities.MainActivity;
 import com.dhchoi.crowdsourcingapp.activities.TaskCompleteActivity;
 import com.dhchoi.crowdsourcingapp.task.Task;
 import com.dhchoi.crowdsourcingapp.views.CustomSwipeRefreshLayout;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.maps.model.LatLng;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
-import java.util.Random;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-public class TaskAvailableListFragment extends Fragment implements MainActivity.OnTasksUpdatedListener {
+public class TaskAvailableListFragment extends Fragment implements
+        MainActivity.OnTasksUpdatedListener, View.OnClickListener {
 
     private ArrayAdapter<Task> mActiveTaskListAdapter;
     private ArrayAdapter<Task> mInactiveTaskListAdapter;
@@ -62,6 +72,8 @@ public class TaskAvailableListFragment extends Fragment implements MainActivity.
 
         mActiveTasksNotice = (TextView) rootView.findViewById(R.id.active_tasks_notice);
         mInactiveTasksNotice = (TextView) rootView.findViewById(R.id.inactive_tasks_notice);
+        Button mButtonActiveShowMap = (Button) rootView.findViewById(R.id.btn_show_in_map_active);
+        Button mButtonInactiveShowMap = (Button) rootView.findViewById(R.id.btn_show_in_map_inactive);
 
         // setup task list views and adapters
         CustomListView activeTaskListView = (CustomListView) rootView.findViewById(R.id.active_tasks);
@@ -90,7 +102,7 @@ public class TaskAvailableListFragment extends Fragment implements MainActivity.
                 new AsyncTask<Void, Void, Boolean>() {
                     @Override
                     protected Boolean doInBackground(Void... params) {
-                        return TaskManager.syncTasks(getActivity(), ((MainActivity)getActivity()).getGoogleApiClient());
+                        return TaskManager.syncTasks(getActivity());
                     }
 
                     @Override
@@ -108,6 +120,9 @@ public class TaskAvailableListFragment extends Fragment implements MainActivity.
         });
 
         firstLaunch = true;
+
+        mButtonActiveShowMap.setOnClickListener(this);
+        mButtonInactiveShowMap.setOnClickListener(this);
 
         // Inflate the layout for this fragment
         return rootView;
@@ -158,6 +173,18 @@ public class TaskAvailableListFragment extends Fragment implements MainActivity.
         mInactiveTasksNotice.setVisibility(mInactiveTaskListAdapter.getCount() > 0 ? TextView.GONE : TextView.VISIBLE);
     }
 
+    @Override
+    public void onClick(View view) {
+        switch (view.getId()) {
+            case R.id.btn_show_in_map_active:
+                ((TaskAvailableFragment) getParentFragment()).swapFragments(TaskAvailableMapFragment.ACTIVE_MARKERS);
+                break;
+            case R.id.btn_show_in_map_inactive:
+                ((TaskAvailableFragment) getParentFragment()).swapFragments(TaskAvailableMapFragment.INACTIVE_MARKERS);
+                break;
+        }
+    }
+
     class TaskListAdapter extends ArrayAdapter<Task> {
 
         public TaskListAdapter(Context context, List<Task> tasks) {
@@ -165,6 +192,7 @@ public class TaskAvailableListFragment extends Fragment implements MainActivity.
             Log.d(Constants.TAG, "got tasks: " + tasks);
         }
 
+        @SuppressWarnings("all")
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             Task task = getItem(position);
@@ -176,8 +204,38 @@ public class TaskAvailableListFragment extends Fragment implements MainActivity.
 
             // set texts
             ((TextView) convertView.findViewById(R.id.num_submitted_response)).setText(task.getName());
-            ((TextView) convertView.findViewById(R.id.task_location)).setText(task.getLocation().getName());
-            ((TextView) convertView.findViewById(R.id.task_cost)).setText("$" + task.getCost());
+            ((TextView) convertView.findViewById(R.id.task_cost)).setText("$" +
+                    new DecimalFormat("#0.00").format(
+                            task.getCost()));
+
+            // display either distance of location name
+            String locationName = task.getLocation().getName();
+            Matcher matcher = Pattern.compile("\\(*\\)").matcher(locationName);
+            if (matcher.find()) {
+                LatLng currentLocation;
+                Location lastKnownLocation = LocationServices.FusedLocationApi.getLastLocation(((MainActivity) getActivity()).getGoogleApiClient());
+
+                // returning from place picker
+                if (lastKnownLocation == null) {
+                    LocationManager locationManager = (LocationManager) getActivity().getSystemService(Context.LOCATION_SERVICE);
+                    lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                }
+                if (lastKnownLocation != null) {
+                    currentLocation = new LatLng(
+                            lastKnownLocation.getLatitude(),
+                            lastKnownLocation.getLongitude());
+
+                    // calculate distance to task
+                    double distance = GeofenceIntentService.getDistanceFromLatLng(task.getLocation().getLatLng(),
+                            currentLocation);
+                    ((TextView) convertView.findViewById(R.id.task_location)).setText(
+                            new DecimalFormat("#.#").format(distance) + "m away");
+                } else {
+                    ((TextView) convertView.findViewById(R.id.task_location)).setText(locationName);
+                }
+            } else {
+                ((TextView) convertView.findViewById(R.id.task_location)).setText(locationName);
+            }
 
             // set remaining time
             String expiresAtText = "";
@@ -197,34 +255,10 @@ public class TaskAvailableListFragment extends Fragment implements MainActivity.
 
             final ImageView taskImage = (ImageView) convertView.findViewById(R.id.task_image);
 
-//            Random random = new Random();
-//            taskImage.setBackgroundColor(0xff000000 + 256 * 256 * random.nextInt(256) + 256 * random.nextInt(256) + random.nextInt(256));
             if (task.isActivated())
                 taskImage.setBackgroundColor(ContextCompat.getColor(getActivity(), R.color.colorAccent));
             else
                 taskImage.setBackgroundColor(ContextCompat.getColor(getActivity(), R.color.colorPrimary));
-
-
-//            new AsyncTask<Void, Void, Bitmap>() {
-//                @Override
-//                protected Bitmap doInBackground(Void... params) {
-//                    Bitmap image = null;
-//                    try {
-//                        URL url = new URL("https://c2.staticflickr.com/4/3713/10988185013_26082c04a4_b.jpg");
-//                        image = BitmapFactory.decodeStream(url.openStream());
-//                    } catch (IOException e) {
-//                        e.printStackTrace();
-//                    }
-//                    return image;
-//                }
-//
-//                @Override
-//                protected void onPostExecute(Bitmap image) {
-//                    if (image != null) {
-//                        taskImage.setImageBitmap(image);
-//                    }
-//                }
-//            }.execute();
 
             // Return the completed view to render on screen
             return convertView;
@@ -243,6 +277,7 @@ public class TaskAvailableListFragment extends Fragment implements MainActivity.
                 return;
             }
 
+            BackgroundLocationService.setDoStartService(false);
             Intent intent = new Intent(getActivity(), TaskCompleteActivity.class);
             intent.putExtra(Task.TASK_KEY_SERIALIZABLE, task.getId());
 

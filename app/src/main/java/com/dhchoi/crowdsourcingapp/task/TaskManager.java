@@ -144,7 +144,7 @@ public class TaskManager {
      */
     public static void reset(Context context, GoogleApiClient googleApiClient) {
         saveLastUpdatedTime(context, 0);
-        removeTasks(context, googleApiClient, new ArrayList<>(getSavedTaskIdsSet(context)));
+        removeTasks(context, new ArrayList<>(getSavedTaskIdsSet(context)));
     }
 
     /**
@@ -171,12 +171,11 @@ public class TaskManager {
     /**
      * Creates a list of {@link Task}s from its string representation and
      *
-     * @param context         of the app
-     * @param googleApiClient to be used for Google services
-     * @param fetchResponse       JSON array of {@link Task}s by its string representation
+     * @param context               of the app
+     * @param fetchResponse         JSON array of {@link Task}s by its string representation
      * @throws SecurityException
      */
-    private static void setTasks(Context context, GoogleApiClient googleApiClient, String fetchResponse) throws SecurityException {
+    private static void setTasks(Context context, String fetchResponse) throws SecurityException {
         Log.i(TAG, "Setting Tasks...");
         try {
             SharedPreferences.Editor prefsEditor = getSharedPreferences(context).edit();
@@ -186,11 +185,11 @@ public class TaskManager {
             // create list of tasks from json string
             List<Task> allTasks = new Gson().fromJson(fetchResponse, new TypeToken<ArrayList<Task>>() {}.getType());
             List<Task> addedTasks = new ArrayList<>();      // also to be added as geofence
-            List<Task> ownedTasks = new ArrayList<>();
 
             for (Task t : allTasks) {
                 Log.d("Scanning Tasks", "Task ID: " + t.getId() + " #Responses: " + t.getTaskResponses().size());
 
+                t.setActivated(true);
                 for (TaskResponse taskResponse : t.getTaskResponses()) {
                     String answererId = taskResponse.getUserId();
                     Log.d("Scanning Responses",  "      User ID: " + answererId);
@@ -212,8 +211,6 @@ public class TaskManager {
 
                 if (!userId.equals(t.getOwner())) {     // not my task
                     addedTasks.add(t);
-                } else {
-                    ownedTasks.add(t);
                 }
             }
 
@@ -231,10 +228,9 @@ public class TaskManager {
      * Removes {@link Task}s from the app.
      *
      * @param context         of the app
-     * @param googleApiClient to be used for Google services
      * @param taskIds         list of {@link Task} ids to be removed
      */
-    private static void removeTasks(Context context, GoogleApiClient googleApiClient, List<String> taskIds) {
+    public static void removeTasks(Context context, List<String> taskIds) {
         SharedPreferences sharedPreferences = getSharedPreferences(context);
         SharedPreferences.Editor prefsEditor = sharedPreferences.edit();
         Set<String> savedTaskIdsSet = getSavedTaskIdsSet(context);
@@ -267,10 +263,9 @@ public class TaskManager {
      * Based on this change list, the app will remove {@link Task}s or request additional info for newly created {@link Task}s.
      *
      * @param context         of the app
-     * @param googleApiClient to be used for Google services
      * @return true if the app successfully synced with the server
      */
-    public static boolean syncTasks(Context context, GoogleApiClient googleApiClient) {
+    public static boolean syncTasks(Context context) {
         try {
             final long appLastUpdatedTime = getLastUpdatedTime(context);
 
@@ -324,6 +319,8 @@ public class TaskManager {
                             tasksDeletedIds.add(id);
                         else if (!task.isCompleted() && !task.getOwner().equals(UserManager.getUserId(context))) {     // not my task
                             tasksDeletedIds.add(id);
+                        } else {
+                            updateTask(context, task.setActivated(false));
                         }
                     }
 
@@ -341,7 +338,7 @@ public class TaskManager {
                     tasksDeletedIds.removeAll(deletedIds);
 
                     // remove deleted tasks
-                    removeTasks(context, googleApiClient, tasksDeletedIds);
+                    removeTasks(context, tasksDeletedIds);
 
                     // fetch and set new tasks (only when there are new tasks)
                     if (tasksCreatedIds.size() > 0) {
@@ -352,7 +349,7 @@ public class TaskManager {
                                 HttpClientCallable.GET,
                                 fetchParams));
                         if (fetchResponse != null) {
-                            setTasks(context, googleApiClient, fetchResponse);
+                            setTasks(context, fetchResponse);
                             return true;
                         }
                     }
@@ -365,7 +362,7 @@ public class TaskManager {
                                 HttpClientCallable.GET,
                                 fetchParams));
                         if (fetchResponse != null) {
-                            setTasks(context, googleApiClient, fetchResponse);
+                            setTasks(context, fetchResponse);
                         }
                     }
                 }

@@ -16,6 +16,7 @@ public class Constants {
     public static final String APP_SERVER_TASK_SYNC_URL = APP_SERVER_BASE_URL + "/db/task-sync";
     public static final String APP_SERVER_TASK_FETCH_URL = APP_SERVER_BASE_URL + "/db/task-fetch";
     public static final String APP_SERVER_TASK_DELETE_URL = APP_SERVER_BASE_URL + "/db/task-delete";
+    public static final String APP_SERVER_TASK_DEACTIVATE_URL = APP_SERVER_BASE_URL + "/db/task-deactivate";
     public static final String APP_SERVER_RESPONSE_FETCH_URL = APP_SERVER_BASE_URL + "/db/response-fetch";
     public static final String APP_SERVER_USER_CREATE_URL = APP_SERVER_BASE_URL + "/db/user-create";
     public static final String APP_SERVER_USER_FETCH_URL = APP_SERVER_BASE_URL + "/db/user-fetch";
