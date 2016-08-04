@@ -21,7 +21,6 @@ import android.support.v4.content.LocalBroadcastManager;
 import android.support.v4.view.ViewPager;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.widget.Toolbar;
-import android.text.method.BaseKeyListener;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -151,6 +150,7 @@ public class MainActivity extends BaseGoogleApiActivity implements TaskManager.O
         LocationListener = new GeofenceIntentService.LocationChangeListener() {
             @Override
             public void onLocationChanged(Location location) {
+
                 super.onLocationChanged(location);  // print log
 
                 Intent intent = new Intent(MainActivity.this, GeofenceIntentService.class);

@@ -6,7 +6,6 @@ import android.content.Intent;
 import android.location.Location;
 import android.location.LocationManager;
 import android.os.Bundle;
-import android.support.annotation.IntegerRes;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
@@ -20,6 +19,7 @@ import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.DatePicker;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.ProgressBar;
 import android.widget.Spinner;
 import android.widget.TimePicker;
@@ -231,8 +231,15 @@ public class TaskCreateActivity extends AppCompatActivity {
         mTaskActionAdd.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                View taskActionLayout = LayoutInflater.from(TaskCreateActivity.this).inflate(R.layout.task_action_text_create, null);
+                final View taskActionLayout = LayoutInflater.from(TaskCreateActivity.this).inflate(R.layout.task_action_text_create, null);
                 mTaskActionLayouts.add((ViewGroup) taskActionLayout);
+                ImageButton actionDelete = (ImageButton) taskActionLayout.findViewById(R.id.action_delete);
+                actionDelete.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        mTaskActionsContainer.removeView(taskActionLayout);
+                    }
+                });
                 mTaskActionsContainer.addView(taskActionLayout);
             }
         });

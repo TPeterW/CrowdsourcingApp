@@ -6,7 +6,6 @@ import android.util.Log;
 
 import com.dhchoi.crowdsourcingapp.Constants;
 import com.dhchoi.crowdsourcingapp.HttpClientCallable;
-import com.google.android.gms.common.api.GoogleApiClient;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -108,6 +107,11 @@ public class UserManager {
         return getSharedPreferences(context).getFloat(USER_BALANCE, 20);
     }
 
+    /**
+     * Syncs the current user with the server
+     * @param context of the app
+     * @return current user
+     */
     public static boolean syncUser(Context context) {
         try {
             Map<String, String> userParams = new HashMap<>();
